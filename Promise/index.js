@@ -36,4 +36,9 @@ function MPromise () {
             }
         })
     }
+
+    this.resolve = function (value) {
+        if (this.state) return;
+        if (value === this) return this.rejected(new TypeError('refer to the same object'))
+    }
 }
