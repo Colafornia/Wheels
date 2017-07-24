@@ -7,8 +7,8 @@
     "test": "mocha"
   },
   "devDependencies": {
-    "promises-aplus-tests": "*",
-    "mocha": "*"
+    "promises-aplus-tests": "^2.1.2",
+    "mocha": "^3.2.0"
   },
   "repository": {
     "type": "git",

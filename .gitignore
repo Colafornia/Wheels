@@ -1,2 +1,4 @@
 .vscode
 Promise/node_modules
+.log
+*/*.log
