@@ -1,77 +1,126 @@
-const stateMap = new Map([
-    ['pending', 0],
-    ['fulfilled', 1],
-    ['rejected', 2]
-])
+const PENDING = Symbol('pending');
+const FULFILLED = Symbol('fulfilled');
+const REJECTED = Symbol('rejected');
 
-function MPromise () {
-    this.state = stateMap.get('pending');
-    this.callbackQueue = [];
-
-    this.then = function (onFulfilled, onRejected) {
-        return new MPromise((resolve, rejected) => {
-            const thenWork = function () {
-                // 2.2.4
-                setImmediate(() => {
-                    if (this.state === 1) {
-                        if (onFulfilled && typeof(onFulfilled) === 'function') {
-                            // must be called after promise is fulfilled, with promise’s value as its first argument.
-                            this.reslove(onFulfilled(this.value));
-                        } else {
-                            // must be fulfilled with the same value as promise1.
-                            this.reslove(this.value);
-                        }
-                    }
-                    if (this.state === 2) {
-                        if (onRejected && typeof(onRejected) === 'function') {
-                            // it must be called after promise is rejected, with promise’s reason as its first argument.
-                            this.reject(onRejected(this.reason));
-                        } else {
-                            // must be rejected with the same reason as promise1.
-                            this.reject(this.reason);
-                        }
-                    }
-                })
-            }
-            if (this.state) {
-                thenWork();
-            } else {
-                this.callbackQueue.push(thenWork);
-            }
-        })
-    }
-
-    this.resolve = function (value) {
-        // 状态流转到 reslove
-        if (this.state) return;
-        if (value === this) return this.reject(new TypeError('refer to the same object'));
-        if (typeof value === 'object' || typeof value === 'function') {
-            try {
-                let then = value.then;
-                if (typeof then === 'function') {
-                    then.call(value);
-                }
-            } catch (e) {
-                this.reject(e);
-            }
-        }
-        this.state = stateMap.get('reslove');
+class Promise {
+  constructor(executor) {
+    this.state = PENDING;
+    this.value = undefined;
+    this.reason = undefined;
+    this.onResolvedCallbacks = [];
+    this.onRejectedCallbacks = [];
+    let resolve = value => {
+      if (this.state === PENDING) {
+        this.state = FULFILLED;
         this.value = value;
-        this.callbackQueue.forEach((cb) => {
-            cb(this);
-        })
-    }
-
-    this.reject = function (reason) {
-        // 状态流转到reject
-        if (this.state) return;
-        if (reason === this) return this.reject(new TypeError('refer to the same object'));
-        this.state = stateMap.get('rejected');
+        this.onResolvedCallbacks.forEach(fn => fn());
+      }
+    };
+    let reject = reason => {
+      if (this.state === PENDING) {
+        this.state = REJECTED;
         this.reason = reason;
-        this.callbackQueue.forEach((cb) => {
-            cb(this);
-        })
+        this.onRejectedCallbacks.forEach(fn => fn());
+      }
+    };
+    try {
+      executor(resolve, reject);
+    } catch (err) {
+      reject(err);
     }
+  }
+
+  then (onFulfilled, onRejected) {
+    // 2.2.1
+    // If onFulfilled/onRejected is not a function, it must be ignored.
+    onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : value => value;
+    onRejected = typeof onRejected === 'function' ? onRejected : err => { throw err };
+    let promise2 = new Promise((resolve, reject) => {
+      if (this.state === FULFILLED) {
+        setTimeout(() => {
+          // 2.2.2
+          // onFulfilled must be called after promise is fulfilled
+          try {
+            let x = onFulfilled(this.value);
+            resolvePromise(promise2, x, resolve, reject);
+          } catch (e) {
+            reject(e);
+          }
+        }, 0);
+      };
+      if (this.state === REJECTED) {
+        setTimeout(() => {
+          // 2.2.3
+          // onRejected must be called after promise is rejected
+          try {
+            let x = onRejected(this.reason);
+            resolvePromise(promise2, x, resolve, reject);
+          } catch (e) {
+            reject(e);
+          }
+        }, 0);
+      };
+      if (this.state === PENDING) {
+        this.onResolvedCallbacks.push(() => {
+          setTimeout(() => {
+            try {
+              let x = onFulfilled(this.value);
+              resolvePromise(promise2, x, resolve, reject);
+            } catch (e) {
+              reject(e);
+            }
+          }, 0);
+        });
+        this.onRejectedCallbacks.push(() => {
+          setTimeout(() => {
+            try {
+              let x = onRejected(this.reason);
+              resolvePromise(promise2, x, resolve, reject);
+            } catch (e) {
+              reject(e);
+            }
+          }, 0)
+        });
+      };
+    });
+    return promise2;
+  }
 }
 
-module.exports = MPromise;
+
+function resolvePromise (promise2, x, resolve, reject) {
+  // 2.3.1
+  if (x === promise2) {
+    return reject(new TypeError('circular reference'));
+  }
+  // flag
+  // ensure resolve/reject only exec once
+  let called;
+  if (x != null && (typeof x === 'object' || typeof x === 'function')) {
+    try {
+      let then = x.then;
+      // regard as promise
+      if (typeof then === 'function') {
+        then.call(x, y => {
+          if (called) return;
+          called = true;
+          resolvePromise(promise2, y, resolve, reject);
+        }, err => {
+          if (called) return;
+          called = true;
+          reject(err);
+        })
+      } else {
+        resolve(x);
+      }
+    } catch (e) {
+      if (called) return;
+      called = true;
+      reject(e);
+    }
+  } else {
+    resolve(x);
+  }
+}
+
+module.exports = Promise;

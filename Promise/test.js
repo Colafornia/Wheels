@@ -1,9 +1,9 @@
-const Np = require('./index');
+const Promise = require('./index');
 const adapter = {
   deferred: function () {
     let resolve, reject;
 
-    const promise = new Np(function (resolve1, reject1) {
+    const promise = new Promise(function (resolve1, reject1) {
       resolve = resolve1;
       reject  = reject1;
     });
