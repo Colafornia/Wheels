@@ -1,4 +1,6 @@
 .vscode
+.DS_Store
 Promise/node_modules
 .log
 */*.log
+*/yarn.lock
